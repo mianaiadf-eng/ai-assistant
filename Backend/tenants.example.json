@@ -1,0 +1,6 @@
+{
+  "demo-uni": {
+    "adapter": "mock",
+    "base_url": "http://localhost"
+  }
+}
