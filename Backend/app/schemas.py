@@ -26,6 +26,8 @@ class ChatRequest(BaseModel):
     user_token: str
     message: str
     session_id: str | None = None
+    # True = ให้ widget เรียก API ระบบหลักเอง (ใช้ session ในเบราว์เซอร์) คำตอบอาจเป็น {"turn_id","call"}
+    client_exec: bool = False
 
 
 class ChatResponse(BaseModel):
@@ -49,7 +51,22 @@ class ConfirmRequest(BaseModel):
     tenant_id: str
     user_token: str
     action_id: str
+    client_exec: bool = False
+
+
+class TurnResult(BaseModel):
+    """ผลการเรียก API ที่ widget ทำแทน ส่งกลับมาให้งานที่พักไว้ทำต่อ"""
+    tenant_id: str
+    user_token: str
+    call_id: str
+    status: int
+    body: object = None
 
 
 class ConfirmResponse(BaseModel):
     message: str
+
+class TurnCall(BaseModel):
+    """งานยังไม่เสร็จ: ให้ widget เรียก API ระบบหลักตาม call แล้วส่งผลที่ POST /turn/{turn_id}"""
+    turn_id: str
+    call: dict

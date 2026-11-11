@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทดสอบผู้ช่วย AI</title>
+<style>
+  body { margin: 0; font-family: "IBM Plex Sans Thai", "Leelawadee UI", Tahoma, sans-serif;
+         background: #f6f7f5; color: #1d2421; line-height: 1.7; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 120px; }
+  h1 { font-size: 26px; margin: 0 0 8px; }
+  h2 { font-size: 18px; margin: 28px 0 8px; }
+  code, pre { font-family: Consolas, monospace; font-size: 13px; background: #e7ebe8; border-radius: 4px; }
+  code { padding: 1px 5px; }
+  pre { padding: 10px 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  label { display: block; margin: 8px 0; }
+  select { font: inherit; padding: 4px 8px; }
+  .hint { color: #5d6963; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ทดสอบผู้ช่วย AI</h1>
+  <p class="hint">กดปุ่ม 💬 มุมขวาล่างเพื่อเริ่ม ครั้งแรกจะถามล็อกอิน (ใส่ API key = ค่า <code>APP_API_KEY</code> ใน <code>Backend/.env</code>)</p>
+
+  <label>tenant:
+    <select id="tenant">
+      <option value="planka-api">planka-api (เรียนรู้จาก OpenAPI · Planka จริง)</option>
+      <option value="demo-uni">demo-uni (ข้อมูลจำลอง)</option>
+    </select>
+  </label>
+  <p class="hint">บัญชี Planka ทดสอบ: <code>demo</code> / <code>demo</code> · ดูผลจริงที่ <a href="http://localhost:3000" target="_blank" rel="noopener">localhost:3000</a></p>
+
+  <h2>ลองพิมพ์</h2>
+  <ul>
+    <li>ในบอร์ดตารางสอบมีการ์ดอะไรบ้าง</li>
+    <li>สร้างการ์ดชื่อ อ่านบทที่ 5 ในลิสต์ งานที่ต้องทำ กำหนดส่งพรุ่งนี้ 18:00</li>
+    <li>ลบการ์ด อ่านบทที่ 5</li>
+  </ul>
+
+  <h2>ฝังในหน้า Planka (ไม่ต้องแก้โค้ด Planka)</h2>
+  <p class="hint">สร้าง bookmark ใหม่ แล้ววางข้อความนี้ในช่อง URL เปิดหน้า Planka แล้วกด bookmark นั้น</p>
+  <pre id="bookmarklet"></pre>
+</main>
+<script>
+  // tenant ที่เลือก: โหลดหน้าใหม่พร้อม ?tenant=... เพื่อให้ widget ใช้ค่านั้น
+  var params = new URLSearchParams(location.search);
+  var tenant = params.get("tenant") || "planka-api";
+  var sel = document.getElementById("tenant");
+  sel.value = tenant;
+  sel.addEventListener("change", function () { location.search = "?tenant=" + encodeURIComponent(sel.value); });
+
+  var s = document.createElement("script");
+  s.src = "/widget.js";
+  s.dataset.tenant = tenant;
+  s.dataset.auth = "login";  // หน้านี้ไม่ได้อยู่ในระบบหลัก จึงไม่มี session ของระบบหลักให้ใช้
+  document.body.appendChild(s);
+
+  document.getElementById("bookmarklet").textContent =
+    "javascript:(function(){var s=document.createElement('script');s.src='" + location.origin +
+    "/widget.js';s.dataset.tenant='planka-api';document.body.appendChild(s);})();";
+</script>
+</body>
+</html>
