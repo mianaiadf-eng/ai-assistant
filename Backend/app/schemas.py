@@ -23,3 +23,13 @@ class ChatResponse(BaseModel):
     session_id: str
     reply: str                # ข้อความตอบ (มีตารางมาร์กดาวน์ได้)
     exams: list[Exam] = []    # ข้อมูลโครงสร้าง ให้ frontend วาดตารางเองได้
+
+
+class LoginRequest(BaseModel):
+    tenant_id: str
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    token: str

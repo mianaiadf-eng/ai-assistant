@@ -10,6 +10,7 @@ from datetime import datetime
 import httpx
 
 from app.adapters.base import Adapter, AdapterError, normalize_dt
+from app.config import HTTP_TIMEOUT
 from app.schemas import Exam
 
 ROOM_RE = re.compile(r"(?:ห้อง|room)\s*[:：]\s*(.+)", re.IGNORECASE)
@@ -30,6 +31,27 @@ class PlankaAdapter(Adapter):
             "Authorization": f"Bearer {self.user_token}",
             "X-API-Key": self.user_token,
         }
+
+    async def login(self, username: str, password: str) -> str:
+        try:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                r = await client.post(
+                    f"{self.base_url}/api/access-tokens",
+                    json={"emailOrUsername": username, "password": password},
+                )
+        except httpx.HTTPError as e:
+            raise AdapterError(f"เชื่อมต่อ Planka ไม่ได้ ({type(e).__name__})") from e
+        if r.status_code in (400, 401, 403, 422):
+            raise AdapterError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+        if r.status_code >= 400:
+            raise AdapterError(f"Planka ตอบกลับด้วยรหัส {r.status_code}")
+        try:
+            token = r.json().get("item")
+        except ValueError as e:
+            raise AdapterError("Planka ตอบกลับข้อมูลที่อ่านไม่ได้") from e
+        if not token:
+            raise AdapterError("ไม่ได้รับ token จาก Planka")
+        return token
 
     async def _get(self, client: httpx.AsyncClient, path: str) -> dict:
         try:
@@ -61,7 +83,7 @@ class PlankaAdapter(Adapter):
             date_to = normalize_dt(date_to)
 
         exams: list[Exam] = []
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             projects = await self._get(client, "/api/projects")
             boards = projects.get("included", {}).get("boards", [])
 

@@ -42,3 +42,7 @@ class Adapter(ABC):
     # ฟังก์ชันอื่นเพิ่มได้ทีหลัง ระบบไหนไม่รองรับให้ raise NotSupported
     async def get_assignments(self, *args, **kwargs):
         raise NotSupported("ระบบนี้ยังไม่รองรับ")
+
+    async def login(self, username: str, password: str) -> str:
+        """แลกชื่อผู้ใช้/รหัสผ่านเป็น token ของระบบหลัก ระบบไหนไม่รองรับให้ raise NotSupported"""
+        raise NotSupported("ระบบนี้ไม่รองรับการล็อกอินผ่านผู้ช่วย")

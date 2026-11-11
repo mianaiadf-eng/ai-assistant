@@ -30,7 +30,12 @@ LLM_BASE_URL = _env("LLM_BASE_URL")
 LLM_API_KEY = _env("LLM_API_KEY")
 LLM_MODEL = _env("LLM_MODEL")
 
+# CORS: ใส่โดเมนของหน้าเว็บ คั่นด้วยจุลภาค เช่น http://localhost:5500,http://localhost:3000
+CORS_ORIGINS = [o.strip() for o in _env("CORS_ORIGINS", "*").split(",") if o.strip()]
 
+# timeout (วินาที)
+LLM_TIMEOUT = float(_env("LLM_TIMEOUT", "120") or 120)
+HTTP_TIMEOUT = float(_env("HTTP_TIMEOUT", "15") or 15)
 def _load_tenants() -> dict:
     path = BASE_DIR / "tenants.json"
     if not path.exists():
