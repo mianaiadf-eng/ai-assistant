@@ -39,10 +39,19 @@ class Adapter(ABC):
     ) -> list[Exam]:
         ...
 
-    # ฟังก์ชันอื่นเพิ่มได้ทีหลัง ระบบไหนไม่รองรับให้ raise NotSupported
+    # ความสามารถอื่น: ระบบไหนไม่รองรับให้ raise NotSupported (ค่าเริ่มต้น)
     async def get_assignments(self, *args, **kwargs):
         raise NotSupported("ระบบนี้ยังไม่รองรับ")
 
     async def login(self, username: str, password: str) -> str:
-        """แลกชื่อผู้ใช้/รหัสผ่านเป็น token ของระบบหลัก ระบบไหนไม่รองรับให้ raise NotSupported"""
         raise NotSupported("ระบบนี้ไม่รองรับการล็อกอินผ่านผู้ช่วย")
+
+    async def create_card(
+        self,
+        list_name: str,
+        name: str,
+        due_date: datetime | None = None,
+        description: str | None = None,
+    ) -> dict:
+        """สร้างงาน/การ์ดในลิสต์ที่ระบุ คืน dict ที่มี id, name, list"""
+        raise NotSupported("ระบบนี้ยังไม่รองรับการสร้างงาน")

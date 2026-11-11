@@ -1,4 +1,4 @@
-"""Chat API: POST /login, POST /chat, GET /health"""
+"""Chat API: POST /login, /chat, /confirm, /cancel, GET /health"""
 import logging
 import secrets
 
@@ -11,12 +11,17 @@ from app.adapters.base import AdapterError, NotSupported
 from app.adapters.registry import get_adapter
 from app.config import APP_API_KEY, CORS_ORIGINS, LLM_PROVIDER
 from app.core.assistant import chat
-from app.schemas import ChatRequest, ChatResponse, LoginRequest, LoginResponse
+from app.core.tools import REGISTRY
+from app.schemas import (
+    ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse,
+    LoginRequest, LoginResponse,
+)
+from app.services import pending
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("assistant")
 
-app = FastAPI(title="University AI Assistant", version="0.2.0")
+app = FastAPI(title="University AI Assistant", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -76,3 +81,33 @@ async def chat_endpoint(req: ChatRequest, _: None = Depends(verify_key)):
     except Exception:
         log.exception("unexpected error")
         raise HTTPException(status_code=500, detail="เกิดข้อผิดพลาดภายในระบบ")
+
+
+@app.post("/confirm", response_model=ConfirmResponse)
+async def confirm_endpoint(req: ConfirmRequest, _: None = Depends(verify_key)):
+    rec = pending.take(req.action_id, req.tenant_id, req.user_token)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="ไม่พบงานที่รอยืนยัน หรือหมดอายุแล้ว กรุณาสั่งใหม่")
+    tool = REGISTRY.get(rec.tool)
+    if tool is None:
+        raise HTTPException(status_code=404, detail="ไม่รู้จักงานนี้")
+    try:
+        adapter = get_adapter(req.tenant_id, req.user_token)
+        message = await tool.run(adapter, rec.args, {})
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e.args[0]))
+    except NotSupported as e:
+        raise HTTPException(status_code=501, detail=str(e))
+    except AdapterError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception:
+        log.exception("confirm failed")
+        raise HTTPException(status_code=500, detail="เกิดข้อผิดพลาดภายในระบบ")
+    log.info("CONFIRMED tool=%s tenant=%s", rec.tool, rec.tenant_id)  # ไม่ log token
+    return ConfirmResponse(message=message)
+
+
+@app.post("/cancel")
+async def cancel_endpoint(req: ConfirmRequest, _: None = Depends(verify_key)):
+    rec = pending.take(req.action_id, req.tenant_id, req.user_token)
+    return {"cancelled": rec is not None}

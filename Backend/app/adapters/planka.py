@@ -1,11 +1,10 @@
 """Adapter ของ Planka
-สมมติโครงสร้างการ์ด: ชื่อการ์ด = วิชา, due date = เวลาสอบ,
-label = ประเภทสอบ, description มีบรรทัด "ห้อง: xxx"
+ชื่อการ์ด = วิชา, due date = เวลาสอบ, label = ประเภทสอบ, description มีบรรทัด "ห้อง: xxx"
 
 หมายเหตุ: API ของ Planka ไม่มีเอกสารทางการครบ ชื่อ field อาจต่างตามเวอร์ชัน
-ให้ทดสอบกับเวอร์ชันที่ติดตั้งจริง แล้วปรับตรงนี้ที่เดียว"""
+ส่วน get_exams/login ทดสอบกับของจริงแล้ว ส่วน create_card ยังไม่ได้ทดสอบ"""
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 
@@ -26,7 +25,6 @@ TYPE_MAP = {
 
 class PlankaAdapter(Adapter):
     def _headers(self) -> dict:
-        # v1/JWT ใช้ Bearer, v2 ที่ใช้ API key ใช้ X-API-Key (ส่งทั้งคู่ไม่เสียหาย)
         return {
             "Authorization": f"Bearer {self.user_token}",
             "X-API-Key": self.user_token,
@@ -53,19 +51,25 @@ class PlankaAdapter(Adapter):
             raise AdapterError("ไม่ได้รับ token จาก Planka")
         return token
 
-    async def _get(self, client: httpx.AsyncClient, path: str) -> dict:
+    async def _request(self, client: httpx.AsyncClient, method: str, path: str,
+                       json: dict | None = None) -> dict:
         try:
-            r = await client.get(f"{self.base_url}{path}", headers=self._headers())
+            r = await client.request(
+                method, f"{self.base_url}{path}", headers=self._headers(), json=json
+            )
         except httpx.HTTPError as e:
             raise AdapterError(f"เชื่อมต่อ Planka ไม่ได้ ({type(e).__name__})") from e
         if r.status_code in (401, 403):
-            raise AdapterError("token ไม่ถูกต้องหรือไม่มีสิทธิ์เข้าถึง Planka")
+            raise AdapterError("token ไม่ถูกต้องหรือไม่มีสิทธิ์ทำรายการนี้ใน Planka")
         if r.status_code >= 400:
             raise AdapterError(f"Planka ตอบกลับด้วยรหัส {r.status_code}")
         try:
             return r.json()
         except ValueError as e:
             raise AdapterError("Planka ตอบกลับข้อมูลที่อ่านไม่ได้") from e
+
+    async def _get(self, client: httpx.AsyncClient, path: str) -> dict:
+        return await self._request(client, "GET", path)
 
     @staticmethod
     def _parse_due(value: str | None) -> datetime | None:
@@ -105,7 +109,7 @@ class PlankaAdapter(Adapter):
                 for card in inc.get("cards", []):
                     starts = self._parse_due(card.get("dueDate"))
                     if starts is None:
-                        continue  # การ์ดที่ไม่มีวันสอบ ข้าม
+                        continue
                     if date_from and starts < date_from:
                         continue
                     if date_to and starts > date_to:
@@ -137,3 +141,48 @@ class PlankaAdapter(Adapter):
 
         exams.sort(key=lambda e: e.starts_at)
         return exams
+
+    async def _find_list(self, client: httpx.AsyncClient, list_name: str):
+        """หาลิสต์จากชื่อ คืน (id, ชื่อจริง, position ท้ายสุด)"""
+        target = list_name.strip().lower()
+        projects = await self._get(client, "/api/projects")
+        matches = []
+        for board in projects.get("included", {}).get("boards", []):
+            data = await self._get(client, f"/api/boards/{board['id']}")
+            inc = data.get("included", {})
+            for lst in inc.get("lists", []):
+                if lst.get("type") != "active":
+                    continue
+                if (lst.get("name") or "").strip().lower() != target:
+                    continue
+                positions = [
+                    c.get("position") or 0
+                    for c in inc.get("cards", [])
+                    if c.get("listId") == lst["id"]
+                ]
+                matches.append((lst["id"], lst["name"], max(positions, default=0)))
+        if not matches:
+            raise AdapterError(f"ไม่พบลิสต์ชื่อ “{list_name}”")
+        if len(matches) > 1:
+            raise AdapterError(f"มีลิสต์ชื่อ “{list_name}” มากกว่าหนึ่งรายการ ระบุให้ชัดเจนขึ้น")
+        return matches[0]
+
+    async def create_card(self, list_name, name, due_date=None, description=None):
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+            list_id, real_name, last_pos = await self._find_list(client, list_name)
+
+            body: dict = {"type": "project", "name": name, "position": last_pos + 65536}
+            if description:
+                body["description"] = description
+            if due_date:
+                utc = normalize_dt(due_date).astimezone(timezone.utc)
+                body["dueDate"] = utc.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+            data = await self._request(
+                client, "POST", f"/api/lists/{list_id}/cards", json=body
+            )
+            card_id = (data.get("item") or {}).get("id")
+            if not card_id:
+                raise AdapterError("Planka ไม่ได้ส่งรหัสการ์ดกลับมา")
+
+        return {"id": str(card_id), "name": name, "list": real_name}
