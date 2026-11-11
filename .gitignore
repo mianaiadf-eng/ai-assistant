@@ -1,5 +1,7 @@
 .env
 tenants.json
 venv/
+.venv/
+.pytest_cache/
 __pycache__/
 *.pyc
