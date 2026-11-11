@@ -1,0 +1,17 @@
+name: planka-assistant
+
+services:
+  assistant-proxy:
+    image: mirror.gcr.io/library/nginx:alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./assistant:/usr/share/nginx/assistant:ro
+    networks:
+      - planka_default
+    restart: unless-stopped
+
+networks:
+  planka_default:
+    external: true
