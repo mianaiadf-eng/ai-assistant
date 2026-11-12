@@ -1,31 +1,29 @@
-"""ให้เบราว์เซอร์ (widget) เป็นคนเรียก API ของระบบหลัก
+"""bridge แบบ HTTP: ให้ไคลเอนต์ที่ไม่มี WebSocket เป็นคนเรียก API ของระบบที่ฝัง widget
 
-ทำไม: ระบบหลักหลายตัว (เช่น Planka) ผูก token ของหน้าเว็บกับ cookie แบบ httpOnly
-token ที่ widget อ่านได้จึงใช้ได้เฉพาะเมื่อส่งจากเบราว์เซอร์ในเว็บเดียวกันเท่านั้น
-และ AI ก็ทำได้ไม่เกินสิทธิ์ของผู้ใช้คนนั้นพอดี
+ทำไม: ระบบหลายตัว (เช่น Planka) ผูก token ของหน้าเว็บกับ cookie แบบ httpOnly
+token จึงใช้ได้เฉพาะเมื่อส่งจากเบราว์เซอร์ในเว็บเดียวกัน และ AI ทำได้ไม่เกินสิทธิ์ของผู้ใช้คนนั้น
 
 วิธีทำงาน: งาน (เช่นแชต 1 ข้อความ) รันเป็น task ค้างไว้ในหน่วยความจำ
-เมื่อโค้ดต้องเรียก API ระบบหลัก (Catalog.call) จะส่ง "คำขอ" ออกมาเป็นคำตอบของ HTTP request
-widget เรียก API เอง แล้วส่งผลกลับที่ /turn/{turn_id} งานจึงทำต่อจากจุดเดิม
-(การตรวจกฎทั้งหมด เช่น ห้ามเดา id และขั้นยืนยัน ยังอยู่ฝั่งเซิร์ฟเวอร์เหมือนเดิม)
+เมื่อโค้ดต้องเรียก API (AgentCtx.http) จะส่ง "คำขอ" ออกมาเป็นคำตอบของ HTTP request
+ไคลเอนต์เรียก API เอง แล้วส่งผลกลับที่ /turn/{turn_id} งานจึงทำต่อจากจุดเดิม
+(widget รุ่นปัจจุบันใช้ WebSocket แทน ดู app/hub/ws.py)
 
-ข้อจำกัด: เก็บในหน่วยความจำของ process เดียว (ถ้ารันหลาย instance ต้องย้ายไปใช้ sticky session หรือคิว)
+ข้อจำกัด: เก็บในหน่วยความจำของ process เดียว (ถ้ารันหลาย instance ต้องใช้ sticky session หรือคิว)
 """
 import asyncio
-import contextvars
 import hashlib
 import logging
 import secrets
 import time
 from dataclasses import dataclass, field
 
+from app.services import bridge
+
 log = logging.getLogger("assistant")
 
-CALL_TIMEOUT = 120      # วินาทีที่รอให้ widget ส่งผลการเรียก API กลับมา
+CALL_TIMEOUT = 120      # วินาทีที่รอให้ไคลเอนต์ส่งผลการเรียก API กลับมา
 EVENT_TIMEOUT = 300     # วินาทีที่ HTTP request หนึ่งรองานคืบหน้า (LLM อาจช้า)
 TURN_TTL = 600
-
-_bridge: contextvars.ContextVar["Turn | None"] = contextvars.ContextVar("browser_bridge", default=None)
 
 
 class TurnError(Exception):
@@ -33,6 +31,7 @@ class TurnError(Exception):
 
 
 def owner_of(tenant_id: str, user_token: str) -> str:
+    """ตัวตนของผู้ใช้ใน assistant = client + token ของผู้ใช้ในหน้านั้น (ไม่เก็บ token ตรง ๆ)"""
     return hashlib.sha256(f"{tenant_id}:{user_token}".encode("utf-8")).hexdigest()
 
 
@@ -47,7 +46,6 @@ class Turn:
 
     async def http(self, method: str, path: str, query: dict, body,
                    body_format: str = "json") -> tuple[int, object]:
-        """เรียกจาก Catalog.call: ขอให้ widget เรียก API แล้วรอผล"""
         call_id = secrets.token_urlsafe(8)
         fut = asyncio.get_running_loop().create_future()
         self.waiting[call_id] = fut
@@ -62,12 +60,13 @@ class Turn:
         finally:
             self.waiting.pop(call_id, None)
 
+    async def emit(self, event: dict) -> None:
+        # HTTP ส่งสถานะระหว่างทางไม่ได้ ให้ hub กระจายไปยังหน้าเว็บของผู้ใช้ที่ต่อ WebSocket อยู่ (ถ้ามี)
+        from app.hub.ws import hub
+        await hub.publish(self.owner, event)
+
 
 _turns: dict[str, Turn] = {}
-
-
-def active_bridge() -> Turn | None:
-    return _bridge.get()
 
 
 def _purge() -> None:
@@ -96,13 +95,13 @@ async def _next(turn: Turn) -> dict:
 
 
 async def start(coro_factory, tenant_id: str, user_token: str):
-    """เริ่มงานที่อาจต้องให้เบราว์เซอร์เรียก API (coro_factory: ฟังก์ชันที่คืน coroutine)"""
+    """เริ่มงานที่อาจต้องให้ไคลเอนต์เรียก API (coro_factory: ฟังก์ชันที่คืน coroutine)"""
     _purge()
     turn = Turn(id=secrets.token_urlsafe(16), owner=owner_of(tenant_id, user_token))
     _turns[turn.id] = turn
 
     async def runner():
-        _bridge.set(turn)
+        bridge.use(turn)
         try:
             await turn.events.put(("done", await coro_factory()))
         except asyncio.CancelledError:
