@@ -6,6 +6,9 @@ from app.schemas import Exam
 
 
 class MockAdapter(Adapter):
+    async def login(self, username: str, password: str) -> str:
+        return "mock-token"  # ระบบจำลอง: รับทุกชื่อผู้ใช้/รหัสผ่าน
+
     async def get_exams(self, date_from=None, date_to=None, exam_type=None):
         today = datetime.now(TZ).replace(hour=0, minute=0, second=0, microsecond=0)
         if date_from:

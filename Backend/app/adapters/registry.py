@@ -1,11 +1,9 @@
 from app.adapters.base import Adapter
 from app.adapters.mock import MockAdapter
-from app.adapters.planka import PlankaAdapter
 from app.config import TENANTS
 
 # เพิ่มระบบใหม่: เขียน adapter แล้วลงทะเบียนที่นี่บรรทัดเดียว
 ADAPTERS: dict[str, type[Adapter]] = {
-    "planka": PlankaAdapter,
     "mock": MockAdapter,
 }
 
