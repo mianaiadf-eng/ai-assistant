@@ -2,7 +2,7 @@
 
 ระดับความเสี่ยงกำหนดด้วยโค้ดจาก HTTP method (โมเดลเปลี่ยนไม่ได้):
   GET -> read, POST/PUT/PATCH -> write, DELETE -> destructive
-tenant ปรับได้ผ่าน policy: risk (รายตัว), blocked / blocked_tags (ซ่อนและเรียกไม่ได้), labels (ชื่อไทย),
+sub agent ปรับได้ผ่าน policy: risk (รายตัว), blocked / blocked_tags (ซ่อนและเรียกไม่ได้), labels (ชื่อไทย),
 defaults (ค่าที่ใส่ให้เองเมื่อโมเดลไม่ส่ง สำหรับ spec ที่ไม่ตรงกับพฤติกรรมจริง)
 """
 from dataclasses import dataclass, field

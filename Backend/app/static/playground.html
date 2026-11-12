@@ -21,19 +21,18 @@
 <body>
 <main>
   <h1>ทดสอบผู้ช่วย AI</h1>
-  <p class="hint">กดปุ่ม 💬 มุมขวาล่างเพื่อเริ่ม ครั้งแรกจะถามล็อกอิน (ใส่ API key = ค่า <code>APP_API_KEY</code> ใน <code>Backend/.env</code>)</p>
+  <p class="hint">กดปุ่ม 💬 มุมขวาล่างเพื่อเริ่ม ครั้งแรกจะถาม API key (ค่า <code>APP_API_KEY</code> ใน <code>Backend/.env</code> หรือ public_key ของ client <code>playground</code>)</p>
 
-  <label>tenant:
-    <select id="tenant">
-      <option value="planka-api">planka-api (เรียนรู้จาก OpenAPI · Planka จริง)</option>
-      <option value="demo-uni">demo-uni (ข้อมูลจำลอง)</option>
-    </select>
-  </label>
-  <p class="hint">บัญชี Planka ทดสอบ: <code>demo</code> / <code>demo</code> · ดูผลจริงที่ <a href="http://localhost:3000" target="_blank" rel="noopener">localhost:3000</a></p>
+  <p class="hint">หน้านี้ใช้ client <code>playground</code> ซึ่งไม่ได้ฝังในระบบใด
+    ผู้ช่วยจึงขอให้ผูกบัญชีทีละระบบเมื่อจำเป็น (auth กลาง) ·
+    บัญชี Planka ทดสอบ: <code>demo</code> / <code>demo</code> (ดูผลจริงที่ <a href="http://localhost:3000" target="_blank" rel="noopener">localhost:3000</a>) ·
+    ระบบทะเบียนจำลองรับทุกชื่อผู้ใช้/รหัสผ่าน</p>
 
   <h2>ลองพิมพ์</h2>
   <ul>
-    <li>ในบอร์ดตารางสอบมีการ์ดอะไรบ้าง</li>
+    <li>ระบบทะเบียน: สัปดาห์นี้มีสอบอะไรบ้าง</li>
+    <li>ขอสอบซ่อมวิชาฟิสิกส์ 1 เพราะป่วย</li>
+    <li>ในบอร์ดตารางสอบของ Planka มีการ์ดอะไรบ้าง</li>
     <li>สร้างการ์ดชื่อ อ่านบทที่ 5 ในลิสต์ งานที่ต้องทำ กำหนดส่งพรุ่งนี้ 18:00</li>
     <li>ลบการ์ด อ่านบทที่ 5</li>
   </ul>
@@ -43,17 +42,11 @@
   <pre id="bookmarklet"></pre>
 </main>
 <script>
-  // tenant ที่เลือก: โหลดหน้าใหม่พร้อม ?tenant=... เพื่อให้ widget ใช้ค่านั้น
   var params = new URLSearchParams(location.search);
-  var tenant = params.get("tenant") || "planka-api";
-  var sel = document.getElementById("tenant");
-  sel.value = tenant;
-  sel.addEventListener("change", function () { location.search = "?tenant=" + encodeURIComponent(sel.value); });
-
   var s = document.createElement("script");
   s.src = "/widget.js";
-  s.dataset.tenant = tenant;
-  s.dataset.auth = "login";  // หน้านี้ไม่ได้อยู่ในระบบหลัก จึงไม่มี session ของระบบหลักให้ใช้
+  s.dataset.tenant = params.get("tenant") || "playground";
+  if (params.get("key")) s.dataset.key = params.get("key");   // ไม่ใส่ = widget ถาม API key
   document.body.appendChild(s);
 
   document.getElementById("bookmarklet").textContent =

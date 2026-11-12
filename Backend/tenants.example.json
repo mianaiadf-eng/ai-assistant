@@ -1,10 +1,6 @@
 {
-  "demo-uni": {
-    "adapter": "mock",
-    "base_url": "http://localhost"
-  },
   "planka-api": {
-    "title": "Planka (บอร์ดงานของมหาวิทยาลัย)",
+    "title": "Planka",
     "public_key": "pk_เปลี่ยนเป็นค่าสุ่มของแต่ละ_tenant",
     "allowed_origins": [
       "http://localhost:3000"
@@ -15,83 +11,18 @@
         "name": "accessToken"
       }
     },
-    "notes": "ระบบนี้เป็นบอร์ดคัมบัง: โปรเจกต์ > บอร์ด > ลิสต์ > การ์ด\nGET /projects คืนรายการโปรเจกต์พร้อมบอร์ดใน included.boards และ GET /boards/{id} คืนลิสต์ การ์ด และป้ายกำกับทั้งหมดของบอร์ด\nตารางสอบอยู่ในบอร์ด \"ตารางสอบ\": การ์ด 1 ใบ = 1 วิชา, dueDate = เวลาสอบ, ป้ายกำกับ = ประเภทสอบ, คำอธิบายการ์ดมีบรรทัด \"ห้อง: ...\"",
-    "base_url": "http://localhost:1337",
-    "openapi": "specs/planka.json",
-    "auth": {
-      "type": "bearer"
-    },
-    "login": {
-      "path": "/api/access-tokens",
-      "body": {
-        "emailOrUsername": "{username}",
-        "password": "{password}"
-      },
-      "token_field": "item"
-    },
-    "policy": {
-      "blocked_tags": [
-        "Access Tokens",
-        "Users",
-        "Webhooks",
-        "Config",
-        "Notification Services",
-        "Terms",
-        "Bootstrap",
-        "Background Images"
-      ],
-      "defaults": {
-        "createCard": {
-          "type": "project",
-          "position": 65536
-        },
-        "createList": {
-          "type": "active",
-          "position": 65536
-        },
-        "createLabel": {
-          "position": 65536
-        },
-        "createTask": {
-          "position": 65536
-        },
-        "createTaskList": {
-          "position": 65536
-        },
-        "createBoard": {
-          "position": 65536
-        }
-      },
-      "risk": {
-        "clearList": "destructive",
-        "sortList": "write",
-        "moveListCards": "write"
-      },
-      "labels": {
-        "createProject": "สร้างโปรเจกต์",
-        "updateProject": "แก้ไขโปรเจกต์",
-        "deleteProject": "ลบโปรเจกต์",
-        "updateBoard": "แก้ไขบอร์ด",
-        "deleteBoard": "ลบบอร์ด",
-        "createList": "สร้างลิสต์",
-        "updateList": "แก้ไขลิสต์",
-        "deleteList": "ลบลิสต์",
-        "clearList": "ล้างการ์ดทั้งหมดในลิสต์",
-        "createCard": "สร้างการ์ด",
-        "updateCard": "แก้ไขการ์ด",
-        "deleteCard": "ลบการ์ด",
-        "duplicateCard": "ทำสำเนาการ์ด",
-        "createComment": "เพิ่มความคิดเห็น",
-        "deleteComment": "ลบความคิดเห็น",
-        "createLabel": "สร้างป้ายกำกับ",
-        "deleteLabel": "ลบป้ายกำกับ",
-        "createCardLabel": "ติดป้ายกำกับให้การ์ด",
-        "deleteCardLabel": "เอาป้ายกำกับออกจากการ์ด",
-        "createTask": "เพิ่มงานย่อย",
-        "updateTask": "แก้ไขงานย่อย",
-        "deleteTask": "ลบงานย่อย",
-        "createBoard": "สร้างบอร์ด"
-      }
-    }
+    "host_agent": "planka",
+    "agents": [
+      "planka",
+      "exams_demo"
+    ]
+  },
+  "playground": {
+    "title": "หน้าทดสอบ",
+    "public_key": "pk_playground_เปลี่ยนเป็นค่าสุ่ม",
+    "allowed_origins": [
+      "http://localhost:8000",
+      "http://127.0.0.1:8000"
+    ]
   }
 }
