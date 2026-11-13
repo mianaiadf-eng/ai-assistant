@@ -37,6 +37,33 @@ def _clean(text: str | None) -> str:
     return re.sub(r"<think>.*?</think>", "", text or "", flags=re.DOTALL).strip()
 
 
+_TOOL_TAG = re.compile(r"<tool_call>\s*(.*?)\s*(?:</tool_call>|$)", re.DOTALL)
+
+
+def _extract_text_calls(text: str) -> list[tuple[str, dict]]:
+    """โมเดลเล็กบางตัวพิมพ์ <tool_call>{...}</tool_call> เป็นข้อความแทนการส่ง tool_calls จริง"""
+    calls = []
+    for raw in _TOOL_TAG.findall(text or ""):
+        try:
+            obj = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(obj, dict) or not isinstance(obj.get("name"), str):
+            continue
+        args = obj.get("arguments", obj.get("parameters", {}))
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except ValueError:
+                args = {}
+        calls.append((obj["name"], args if isinstance(args, dict) else {}))
+    return calls
+
+
+def _strip_tool_tags(text: str) -> str:
+    return re.sub(r"<tool_call>.*?(?:</tool_call>|$)", "", text or "", flags=re.DOTALL).strip()
+
+
 def _openai_tools(tools: list[dict]) -> list[dict]:
     return [{"type": "function", "function": {
         "name": t["name"], "description": t["description"], "parameters": t["input_schema"],
@@ -83,6 +110,16 @@ async def _run_openai(history, user_msg, toolset, ctx) -> str:
         msg = resp.choices[0].message
         if not msg.tool_calls:
             text = _clean(msg.content)
+            text_calls = _extract_text_calls(text)
+            if text_calls:
+                messages.append({"role": "assistant", "content": text})
+                outputs = []
+                for name, args in text_calls:
+                    out, _err = await toolset.run(name, args, ctx)
+                    outputs.append(f"ผลของ {name}: {out}")
+                messages.append({"role": "user", "content": "[ระบบ] " + "\n".join(outputs)})
+                continue
+            text = _strip_tool_tags(text)
             fix = toolset.check_reply(text, ctx, user_msg)
             if fix and not corrected:
                 corrected = True

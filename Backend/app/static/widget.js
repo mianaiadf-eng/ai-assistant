@@ -276,6 +276,11 @@
   }
 
   // งานที่ผู้ช่วยขอให้หน้าเว็บนี้เรียก API ของระบบนี้แทนเซิร์ฟเวอร์ (ใช้ cookie/session ของผู้ใช้)
+  var HOST_API_PREFIX = "/api/";
+  var HOST_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+  function hostPathOk(pathname, method) {
+    return pathname.indexOf(HOST_API_PREFIX) === 0 && HOST_METHODS.indexOf(method) !== -1;
+  }
   async function hostFetch(c) {
     // รับเฉพาะ path ภายในเว็บนี้ (กันการถูกสั่งให้ส่ง token ไปเว็บอื่น)
     if (typeof c.path !== "string" || !/^\/(?!\/)/.test(c.path) || c.path.indexOf("\\") !== -1) {
@@ -284,7 +289,7 @@
     var method = String(c.method || "GET").toUpperCase();
     var url = new URL(c.path, location.origin);
     Object.keys(c.query || {}).forEach(function (k) { url.searchParams.set(k, c.query[k]); });
-    if (url.origin !== location.origin) return { status: 400, body: { message: "origin ไม่ถูกต้อง" } };
+    if (url.origin !== location.origin || !hostPathOk(url.pathname, method)) return { status: 400, body: { message: "origin ไม่ถูกต้อง" } };
     var opts = {
       method: method,
       credentials: "same-origin",

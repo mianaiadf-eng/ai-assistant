@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ผู้ช่วย Planka</title>
+<style>
+:root{
+  --bg:#1f2329; --panel:#262b32; --panel2:#2f353d; --line:#3a414b;
+  --text:#e8ebef; --muted:#9aa4b0; --accent:#2fb59a; --accent-ink:#06201b;
+  --warn:#e0a84a; --err:#e5736b;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);
+  font-family:"Noto Sans Thai","Sarabun","Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.55}
+.demo{padding:40px;color:var(--muted);max-width:560px}
+.demo h1{color:var(--text);font-size:20px;margin:0 0 8px}
+
+/* ปุ่มลอย */
+#fab{position:fixed;right:22px;bottom:22px;width:58px;height:58px;border-radius:50%;
+  border:0;background:var(--accent);color:var(--accent-ink);cursor:pointer;
+  box-shadow:0 6px 20px rgba(0,0,0,.45);display:grid;place-items:center}
+#fab svg{width:28px;height:28px}
+#fab:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+/* หน้าต่างแชต */
+#win{position:fixed;right:22px;bottom:94px;width:min(400px,calc(100vw - 24px));
+  height:min(620px,calc(100vh - 120px));background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;display:none;flex-direction:column;overflow:hidden;
+  box-shadow:0 14px 40px rgba(0,0,0,.5)}
+#win.open{display:flex}
+header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel2)}
+header b{flex:1;font-weight:600}
+header button{background:none;border:0;color:var(--muted);cursor:pointer;font:inherit;padding:4px 8px;border-radius:6px}
+header button:hover{color:var(--text);background:var(--line)}
+
+#msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.m{max-width:92%;padding:9px 12px;border-radius:10px;word-wrap:break-word;overflow-x:auto}
+.m.user{align-self:flex-end;background:var(--accent);color:var(--accent-ink)}
+.m.bot{align-self:flex-start;background:var(--panel2);border:1px solid var(--line)}
+.m.err{align-self:flex-start;background:transparent;border:1px solid var(--err);color:var(--err)}
+.m.sys{align-self:center;color:var(--muted);font-size:13px;padding:2px}
+.m table{border-collapse:collapse;margin:6px 0;font-size:13px;min-width:100%}
+.m th,.m td{border:1px solid var(--line);padding:4px 8px;text-align:left;white-space:nowrap}
+.m th{background:var(--panel)}
+.typing{color:var(--muted)}
+
+form.send{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+input{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);
+  padding:9px 11px;font:inherit}
+button.primary{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;
+  padding:9px 14px;font:inherit;font-weight:600;cursor:pointer}
+button.primary:disabled{opacity:.5;cursor:default}
+button.ghost{background:transparent;color:var(--text);border:1px solid var(--line);border-radius:8px;
+  padding:9px 14px;font:inherit;cursor:pointer}
+
+/* ล็อกอิน */
+#login{padding:20px;display:flex;flex-direction:column;gap:10px}
+#login p{margin:0 0 4px;color:var(--muted)}
+#login .err{color:var(--err);min-height:1.4em;font-size:13px}
+
+/* ป๊อปอัปยืนยัน */
+#modal{position:absolute;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:16px}
+#modal.open{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;width:100%}
+.card h3{margin:0 0 8px;font-size:16px}
+.card .sum{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0 14px}
+.card .risk{color:var(--warn);font-size:13px;margin-bottom:6px}
+.card .row{display:flex;gap:8px;justify-content:flex-end}
+@media (prefers-reduced-motion:no-preference){#win.open{animation:up .18s ease-out}}
+@keyframes up{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+<div class="demo">
+  <h1>หน้าทดสอบผู้ช่วย</h1>
+  กดปุ่มกลมมุมขวาล่างเพื่อเปิดแชต หน้านี้จะถูกแทนด้วยหน้า Planka เมื่อฝังจริง
+</div>
+
+<button id="fab" aria-label="เปิดผู้ช่วย">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.3A8 8 0 1 1 21 12z"/></svg>
+</button>
+
+<section id="win" aria-label="ผู้ช่วย">
+  <header>
+    <b>ผู้ช่วย Planka</b>
+    <button id="logout" hidden>ออกจากระบบ</button>
+    <button id="close" aria-label="ปิด">✕</button>
+  </header>
+
+  <form id="login">
+    <p>เข้าสู่ระบบด้วยบัญชี Planka</p>
+    <input id="u" placeholder="ชื่อผู้ใช้หรืออีเมล" autocomplete="username" required>
+    <input id="p" type="password" placeholder="รหัสผ่าน" autocomplete="current-password" required>
+    <div class="err" id="lerr"></div>
+    <button class="primary" id="lbtn">เข้าสู่ระบบ</button>
+  </form>
+
+  <div id="msgs" hidden></div>
+  <form class="send" id="send" hidden>
+    <input id="q" placeholder="ถามเรื่องตารางสอบ หรือสั่งสร้างการ์ด" autocomplete="off">
+    <button class="primary" id="sbtn">ส่ง</button>
+  </form>
+
+  <div id="modal">
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="mt">
+      <h3 id="mt">ยืนยันการดำเนินการ</h3>
+      <div class="risk" id="mrisk"></div>
+      <div class="sum" id="msum"></div>
+      <div class="row">
+        <button class="ghost" id="mno">ยกเลิก</button>
+        <button class="primary" id="myes">ยืนยัน</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+/* ===== ตั้งค่า (แก้ตรงนี้) ===== */
+const API_URL   = "http://127.0.0.1:8000";
+const API_KEY   = "password123";   // ใช้ทดสอบในเครื่องเท่านั้น ห้ามใส่คีย์จริงในหน้าเว็บที่ใช้งานจริง
+const TENANT_ID = "demo-uni";
+/* ============================== */
+
+const $ = id => document.getElementById(id);
+const S = { token: sessionStorage.getItem("tk") || "", session: null, pending: null };
+
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* แสดงมาร์กดาวน์แบบเบา: ตาราง, ตัวหนา, ขึ้นบรรทัดใหม่ */
+function md(text){
+  const lines = esc(text).split("\n"), out = []; let i = 0;
+  while(i < lines.length){
+    if(/^\s*\|.*\|\s*$/.test(lines[i])){
+      const rows = [];
+      while(i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(lines[i++]);
+      const cells = r => r.trim().replace(/^\||\|$/g,"").split("|").map(c => c.trim());
+      const body = rows.filter(r => !/^\s*\|?[\s:\-|]+\|?\s*$/.test(r));
+      out.push("<table>" + body.map((r,k) =>
+        "<tr>" + cells(r).map(c => k ? `<td>${c}</td>` : `<th>${c}</th>`).join("") + "</tr>").join("") + "</table>");
+    } else out.push(lines[i++] + "<br>");
+  }
+  return out.join("").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
+}
+
+function add(kind, text, html){
+  const d = document.createElement("div");
+  d.className = "m " + kind;
+  if(html) d.innerHTML = md(text); else d.textContent = text;
+  $("msgs").appendChild(d);
+  $("msgs").scrollTop = $("msgs").scrollHeight;
+  return d;
+}
+
+function errText(data, status){
+  const d = data && data.detail;
+  if(typeof d === "string") return d;
+  if(Array.isArray(d)) return "ข้อมูลที่ส่งไม่ถูกต้อง";
+  return "เกิดข้อผิดพลาด (รหัส " + status + ")";
+}
+
+async function api(path, body){
+  let res;
+  try{
+    res = await fetch(API_URL + path, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-API-Key":API_KEY},
+      body: JSON.stringify(body)
+    });
+  }catch(e){
+    throw { status:0, message:"เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจว่า uvicorn รันอยู่" };
+  }
+  let data = null; try{ data = await res.json(); }catch(e){}
+  if(!res.ok) throw { status:res.status, message:errText(data, res.status) };
+  return data;
+}
+
+function view(){
+  const on = !!S.token;
+  $("login").hidden = on; $("msgs").hidden = !on; $("send").hidden = !on; $("logout").hidden = !on;
+  if(on) $("q").focus(); else $("u").focus();
+}
+
+function logout(note){
+  S.token = ""; S.session = null; sessionStorage.removeItem("tk");
+  $("msgs").innerHTML = "";
+  if(note) $("lerr").textContent = note;
+  view();
+}
+
+$("fab").onclick = () => { $("win").classList.toggle("open"); view(); };
+$("close").onclick = () => $("win").classList.remove("open");
+$("logout").onclick = () => logout("");
+
+$("login").onsubmit = async e => {
+  e.preventDefault();
+  $("lbtn").disabled = true; $("lerr").textContent = "";
+  try{
+    const r = await api("/login", {tenant_id:TENANT_ID, username:$("u").value.trim(), password:$("p").value});
+    S.token = r.token; sessionStorage.setItem("tk", r.token); $("p").value = "";
+    view();
+    add("sys", "เข้าสู่ระบบแล้ว ลองถามว่า “สัปดาห์นี้มีสอบอะไรบ้าง”");
+  }catch(err){ $("lerr").textContent = err.message; }
+  $("lbtn").disabled = false;
+};
+
+$("send").onsubmit = async e => {
+  e.preventDefault();
+  const text = $("q").value.trim(); if(!text) return;
+  $("q").value = ""; $("sbtn").disabled = true;
+  add("user", text);
+  const wait = add("bot typing", "กำลังคิด…");
+  try{
+    const r = await api("/chat", {tenant_id:TENANT_ID, user_token:S.token, message:text, session_id:S.session});
+    S.session = r.session_id;
+    wait.remove();
+    add("bot", r.reply, true);
+    if(r.pending_action) openModal(r.pending_action);
+  }catch(err){
+    wait.remove();
+    if(err.status === 401) return logout("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่");
+    add("err", err.message);
+  }
+  $("sbtn").disabled = false; $("q").focus();
+};
+
+/* ป๊อปอัปยืนยัน */
+function openModal(p){
+  S.pending = p;
+  $("msum").textContent = p.summary;
+  $("mrisk").textContent = p.risk === "destructive" ? "การกระทำนี้ย้อนกลับได้ยาก" : "การกระทำนี้จะเปลี่ยนข้อมูลใน Planka";
+  $("modal").classList.add("open"); $("myes").focus();
+}
+function closeModal(){ $("modal").classList.remove("open"); S.pending = null; }
+
+async function decide(path, doneMsg){
+  const p = S.pending; if(!p) return;
+  $("myes").disabled = $("mno").disabled = true;
+  try{
+    const r = await api(path, {tenant_id:TENANT_ID, user_token:S.token, action_id:p.id});
+    add("sys", doneMsg || r.message);
+  }catch(err){
+    if(err.status === 401) { closeModal(); return logout("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่"); }
+    add("err", err.message);
+  }
+  closeModal(); $("myes").disabled = $("mno").disabled = false;
+}
+$("myes").onclick = () => decide("/confirm");
+$("mno").onclick = () => decide("/cancel", "ยกเลิกแล้ว ยังไม่มีการเปลี่ยนแปลง");
+document.addEventListener("keydown", e => { if(e.key === "Escape" && S.pending) $("mno").click(); });
+
+view();
+</script>
+</body>
+</html>

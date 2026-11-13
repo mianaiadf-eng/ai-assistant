@@ -19,8 +19,8 @@ def _eq(a: str, b: str) -> bool:
     return bool(a) and bool(b) and secrets.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
 
 
-def check_access(key: str, origin: str, tenant_id: str) -> None:
-    if _eq(key, APP_API_KEY):
+def check_access(key: str, origin: str, tenant_id: str, allow_admin: bool = True) -> None:
+    if allow_admin and _eq(key, APP_API_KEY):
         return
 
     tenant = TENANTS.get(tenant_id) or {}

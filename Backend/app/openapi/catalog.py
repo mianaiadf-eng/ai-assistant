@@ -140,6 +140,8 @@ class Catalog:
                 v = to_utc(v)
             if p.location == "path":
                 # quote แบบ safe="" กันการแทรก ../ หรือ / เพื่อเปลี่ยน endpoint
+                if str(v) in (".", ".."):
+                    raise UpstreamError(f"ค่า {p.name} ไม่ถูกต้อง")
                 path = path.replace("{" + p.name + "}", quote(str(v), safe=""))
             elif p.location == "query":
                 query[p.name] = v

@@ -19,6 +19,7 @@ from app.schemas import (
     AgentInfo, ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse,
     LinkRequest, TurnCall, TurnResult, UnlinkRequest, UserRef,
 )
+from app.ratelimit import MAX_MESSAGE_CHARS, enforce
 from app.security import authorize, widget_config
 from app.services import pending, turns
 from app.services.turns import owner_of
@@ -86,6 +87,9 @@ async def _run(coro_factory, tenant_id: str, user_token: str, client_exec: bool)
 @app.post("/chat", response_model=ChatResponse | TurnCall)
 async def chat_endpoint(req: ChatRequest, request: Request):
     authorize(request, req.tenant_id)
+    if len(req.message) > MAX_MESSAGE_CHARS:
+        raise HTTPException(status_code=413, detail="ข้อความยาวเกินไป กรุณาย่อให้สั้นลง")
+    enforce(f"chat:{owner_of(req.tenant_id, req.user_token)}", 20, 60)
     return await _run(lambda: orchestrator.chat(req.tenant_id, req.user_token, req.message, req.session_id),
                       req.tenant_id, req.user_token, req.client_exec)
 
@@ -124,6 +128,7 @@ async def cancel_endpoint(req: ConfirmRequest, request: Request):
 async def link_endpoint(req: LinkRequest, request: Request):
     """ผูกบัญชีระบบหนึ่ง: ล็อกอินด้วยบัญชีของผู้ใช้ แล้วเก็บ token ไว้ให้ sub agent ของระบบนั้น"""
     authorize(request, req.tenant_id)
+    enforce(f"link:{req.tenant_id}:{req.agent}:{req.username.strip().lower()}", 5, 300)
     try:
         return await orchestrator.link(req.tenant_id, req.user_token, req.agent, req.username, req.password)
     except Exception as e:

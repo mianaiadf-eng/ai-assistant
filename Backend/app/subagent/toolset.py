@@ -346,7 +346,8 @@ class SubAgentToolset:
             text += f" ใน “{_short(container)}”"
         # ไม่แสดงช่องที่ตั้งค่าเริ่มต้นไว้ (ค่าเชิงเทคนิค เช่น position)
         details = [f"{p.name}: {_display(p, args[p.name])}" for p in action.params
-                   if p.location != "path" and p.name not in action.defaults
+                   if p.location != "path" and (p.name not in action.defaults
+                        or str(args.get(p.name)) != str(action.defaults[p.name]))
                    and args.get(p.name) not in (None, "")]
         if details:
             text += " — " + ", ".join(details)

@@ -27,6 +27,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from app.auth import vault
 from app.core import orchestrator
 from app.errors import describe_error
+from app.ratelimit import MAX_MESSAGE_CHARS, allow
 from app.security import check_access
 from app.services import bridge, pending
 from app.services.turns import CALL_TIMEOUT, owner_of
@@ -59,6 +60,9 @@ class Hub:
 hub = Hub()
 
 
+_BG: set = set()  # เก็บ task ที่ต้องทำจนจบ ไม่ให้ถูกเก็บกวาดเมื่อ socket ปิด
+
+
 class Connection:
     def __init__(self, ws: WebSocket, tenant_id: str):
         self.ws = ws
@@ -66,6 +70,7 @@ class Connection:
         self.user_token = ""
         self.owner = ""
         self.job: asyncio.Task | None = None
+        self.job_protected = False
         self.waiting: dict[str, asyncio.Future] = {}
         self._send_lock = asyncio.Lock()
 
@@ -95,7 +100,7 @@ class Connection:
         await self.send(event)
 
     # ---- งาน
-    def _start(self, req_id, coro_factory) -> None:
+    def _start(self, req_id, coro_factory, protect: bool = False) -> None:
         async def runner():
             bridge.use(self)
             try:
@@ -106,6 +111,10 @@ class Connection:
                 status, detail = describe_error(e)
                 await self.send({"type": "error", "req_id": req_id, "status": status, "detail": detail})
         self.job = asyncio.create_task(runner())
+        self.job_protected = protect
+        if protect:
+            _BG.add(self.job)
+            self.job.add_done_callback(_BG.discard)
 
     async def handle(self, msg: dict) -> None:
         kind = msg.get("type")
@@ -157,6 +166,14 @@ class Connection:
             message = str(msg.get("message") or "").strip()
             if not message:
                 return
+            if len(message) > MAX_MESSAGE_CHARS:
+                await self.send({"type": "error", "req_id": req_id, "status": 413,
+                                 "detail": "ข้อความยาวเกินไป กรุณาย่อให้สั้นลง"})
+                return
+            if not allow(f"chat:{self.owner}", 20, 60):
+                await self.send({"type": "error", "req_id": req_id, "status": 429,
+                                 "detail": "ส่งข้อความถี่เกินไป กรุณารอสักครู่"})
+                return
 
             async def do_chat():
                 r = await orchestrator.chat(tenant, token, message, msg.get("session_id"))
@@ -173,8 +190,13 @@ class Connection:
             async def do_confirm():
                 r = await orchestrator.confirm(rec, tenant, token)
                 return {"type": "confirmed", "action_id": action_id, **r.model_dump()}
-            self._start(req_id, do_confirm)
+            self._start(req_id, do_confirm, protect=True)
         elif kind == "link":
+            link_key = f"link:{tenant}:{msg.get('agent')}:{str(msg.get('username') or '').strip().lower()}"
+            if not allow(link_key, 5, 300):
+                await self.send({"type": "error", "req_id": req_id, "status": 429,
+                                 "detail": "ลองผูกบัญชีบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่"})
+                return
             async def do_link():
                 info = await orchestrator.link(tenant, token, str(msg.get("agent")),
                                                str(msg.get("username") or ""), str(msg.get("password") or ""))
@@ -187,11 +209,16 @@ class Connection:
 
     def close(self) -> None:
         hub.remove(self)
-        if self.job is not None and not self.job.done():
+        protected = (self.job_protected and self.job is not None
+                     and not self.job.done())
+        if self.job is not None and not self.job.done() and not protected:
             self.job.cancel()
         for fut in self.waiting.values():
             if not fut.done():
-                fut.cancel()
+                if protected:
+                    fut.set_exception(ConnectionError("หน้าเว็บถูกปิดระหว่างทำงาน"))
+                else:
+                    fut.cancel()
 
 
 async def serve(ws: WebSocket) -> None:
@@ -199,7 +226,7 @@ async def serve(ws: WebSocket) -> None:
     key = ws.query_params.get("key", "") or ws.headers.get("x-api-key", "")
     await ws.accept()
     try:
-        check_access(key, ws.headers.get("origin", ""), tenant_id)
+        check_access(key, ws.headers.get("origin", ""), tenant_id, allow_admin=False)
     except Exception as e:
         status, detail = describe_error(e)
         await ws.send_json({"type": "error", "status": status, "detail": detail})
