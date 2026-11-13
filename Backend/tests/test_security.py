@@ -56,4 +56,13 @@ def test_missing_or_wrong_key():
 def test_widget_config_has_no_secrets():
     cfg = security.widget_config("t1")
     assert cfg == {"tenant_id": "t1", "title": "One",
-                   "token": {"from": "cookie", "name": "accessToken"}}
+                   "token": {"from": "cookie", "name": "accessToken"},
+                   "host_agent": cfg["host_agent"]}
+    assert cfg["host_agent"] is None or isinstance(cfg["host_agent"], str)
+
+
+def test_check_access_used_by_websocket():
+    security.check_access("pk_one", "http://host-one", "t1")
+    with pytest.raises(HTTPException) as e:
+        security.check_access("pk_one", "http://evil", "t1")
+    assert e.value.status_code == 403
